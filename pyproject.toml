@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rm-workflow"
+version = "0.1.0"
+description = "Workflow definition persistence layer (Django installable app) -- Workspaces, Workflows, WorkflowVersions, and Stage graphs. See docs/workflow-store-design.md."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+dependencies = [
+    "django>=5.0,<6.0",
+    "djangorestframework>=3.15",
+    "drf-spectacular>=0.27,<1.0",
+    "psycopg2-binary>=2.9",
+    "jsonschema>=4.20",     # per-category node `data` validation (§8/§9)
+    "django-tenants>=3.6",  # Tier B isolation (schema-per-tenant) -- see the "Tier B Implementation Plan" doc
+    "drf_base @ file:///Users/lsharma/personal/drf-base/dist/drf_base-0.1.0-py3-none-any.whl",
+    "rm_auth_tenant @ file:///Users/lsharma/personal/rm_auth_tenant/dist/rm_auth_tenant-0.1.0-py3-none-any.whl",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-django>=4.8",
+    "black>=24.0",
+    "ruff>=0.4",
+    "import-linter>=2.0",
+]
+
+# --- Packaging: only ship the library app, not the test harness project
+# or this app's own test suite (rm_workflow/tests/) ---
+[tool.setuptools.packages.find]
+include = ["rm_workflow*"]
+exclude = ["rm_workflow.tests*"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py"]
+log_cli = true
+log_cli_level = "INFO"
+
+# --- import-linter contracts: enforce "api never touches models/
+# repositories directly" and "this app depends on rm_auth_tenant + drf_base,
+# never the reverse" (see workflow-store-design.md §14, and the "Tier B
+# Implementation Plan" doc §0.1 for the general split-repo convention this
+# mirrors) ---
+[tool.importlinter]
+root_package = "rm_workflow"
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture"
+type = "layers"
+layers = [
+    "rm_workflow.api",
+    "rm_workflow.services",
+    "rm_workflow.tenants | rm_workflow.workspaces | rm_workflow.workflows | rm_workflow.stages | rm_workflow.validation",
+]
+
+[[tool.importlinter.contracts]]
+name = "Never import rm_auth_tenant's or rm_auth's internals directly -- only their public models/repositories/middleware/authorization"
+type = "forbidden"
+source_modules = ["rm_workflow"]
+forbidden_modules = ["rm_auth_tenant.migrations", "rm_auth.migrations"]
