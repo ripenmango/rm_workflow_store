@@ -6,6 +6,8 @@ from rm_workflow.api.views import (
     StageDetailView,
     StageGraphView,
     StageListCreateView,
+    WorkflowCollaboratorDetailView,
+    WorkflowCollaboratorsView,
     WorkflowVersionListView,
     WorkflowViewSet,
     WorkspaceViewSet,
@@ -42,5 +44,15 @@ urlpatterns = [
         "workflows/<str:workflow_id>/versions/<str:version_id>/stages/<str:stage_id>/graph",
         StageGraphView.as_view(),
         name="rm_workflow_stage_graph",
+    ),
+    path(
+        "workflows/<str:workflow_id>/collaborators",
+        WorkflowCollaboratorsView.as_view(),
+        name="rm_workflow_collaborators",
+    ),
+    path(
+        "workflows/<str:workflow_id>/collaborators/<str:user_id>",
+        WorkflowCollaboratorDetailView.as_view(),
+        name="rm_workflow_collaborator_detail",
     ),
 ]

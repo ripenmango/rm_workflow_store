@@ -9,19 +9,19 @@ from drf_base_app.rest_framework import serializers
 class WorkspaceSerializer(serializers.RMSerializer):
     public_id = serializers.CharField(read_only=True)
     name = serializers.CharField()
-    description = serializers.CharField(required=False, default="")
+    description = serializers.CharField(required=False, default="", allow_blank=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
 
 
 class CreateWorkspaceSerializer(serializers.RMSerializer):
     name = serializers.CharField()
-    description = serializers.CharField(required=False, default="")
+    description = serializers.CharField(required=False, default="", allow_blank=True)
 
 
 class UpdateWorkspaceSerializer(serializers.RMSerializer):
     name = serializers.CharField(required=False)
-    description = serializers.CharField(required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
 
 
 # ---------------------------------------------------------------------------
@@ -32,7 +32,7 @@ class UpdateWorkspaceSerializer(serializers.RMSerializer):
 class StageSerializer(serializers.RMSerializer):
     public_id = serializers.CharField(read_only=True)
     name = serializers.CharField()
-    description = serializers.CharField(required=False, default="")
+    description = serializers.CharField(required=False, default="", allow_blank=True)
     order = serializers.IntegerField()
     graph = serializers.JSONField()
     created_at = serializers.DateTimeField(read_only=True)
@@ -45,7 +45,7 @@ class StageSummarySerializer(serializers.RMSerializer):
 
     public_id = serializers.CharField(read_only=True)
     name = serializers.CharField()
-    description = serializers.CharField(required=False, default="")
+    description = serializers.CharField(required=False, default="", allow_blank=True)
     order = serializers.IntegerField()
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
@@ -53,7 +53,7 @@ class StageSummarySerializer(serializers.RMSerializer):
 
 class CreateStageSerializer(serializers.RMSerializer):
     name = serializers.CharField()
-    description = serializers.CharField(required=False, default="")
+    description = serializers.CharField(required=False, default="", allow_blank=True)
     order = serializers.IntegerField(required=False)
     graph = serializers.JSONField(required=False, default=dict)
 
@@ -62,7 +62,7 @@ class UpdateStageMetadataSerializer(serializers.RMSerializer):
     # Metadata only -- never `graph` (§10: graph edits go through the
     # dedicated PUT .../graph endpoint below).
     name = serializers.CharField(required=False)
-    description = serializers.CharField(required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
     order = serializers.IntegerField(required=False)
 
 
@@ -76,7 +76,7 @@ class BootstrapStageSerializer(serializers.RMSerializer):
     bootstrap payload (§10) -- not exposed as its own endpoint input."""
 
     name = serializers.CharField()
-    description = serializers.CharField(required=False, default="")
+    description = serializers.CharField(required=False, default="", allow_blank=True)
     order = serializers.IntegerField(required=False)
     graph = serializers.JSONField(required=False, default=dict)
 
@@ -103,7 +103,7 @@ class WorkflowSerializer(serializers.RMSerializer):
     public_id = serializers.CharField(read_only=True)
     workspace = serializers.CharField(source="workspace.public_id", read_only=True)
     name = serializers.CharField()
-    description = serializers.CharField(required=False, default="")
+    description = serializers.CharField(required=False, default="", allow_blank=True)
     current_version = serializers.CharField(
         source="current_version.public_id", read_only=True, allow_null=True
     )
@@ -113,7 +113,7 @@ class WorkflowSerializer(serializers.RMSerializer):
 
 class CreateWorkflowSerializer(serializers.RMSerializer):
     name = serializers.CharField()
-    description = serializers.CharField(required=False, default="")
+    description = serializers.CharField(required=False, default="", allow_blank=True)
     workspace = serializers.CharField()  # Workspace public_id
     # Create-time-only bootstrap allowance (§10) -- does NOT reopen a
     # whole-document write path for later edits; see StageViewSet /
@@ -124,4 +124,23 @@ class CreateWorkflowSerializer(serializers.RMSerializer):
 class UpdateWorkflowSerializer(serializers.RMSerializer):
     # Metadata only -- name/description. Never touches stages (§5.1/§10).
     name = serializers.CharField(required=False)
-    description = serializers.CharField(required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
+
+
+# ---------------------------------------------------------------------------
+# Workflow sharing (EntityAccessGrant -- see rm_auth_tenant's
+# authorization/DESIGN.md)
+# ---------------------------------------------------------------------------
+
+
+class WorkflowCollaboratorSerializer(serializers.RMSerializer):
+    user_id = serializers.IntegerField(read_only=True)
+    role = serializers.ChoiceField(read_only=True, choices=["viewer", "editor", "owner"])
+    created_at = serializers.DateTimeField(read_only=True)
+
+
+class ShareWorkflowSerializer(serializers.RMSerializer):
+    user_id = serializers.IntegerField()
+    # "owner" deliberately excluded -- see EntityAccessService.share's
+    # docstring; ownership transfer is a separate, more guarded operation.
+    role = serializers.ChoiceField(choices=["viewer", "editor"])

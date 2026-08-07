@@ -1,5 +1,8 @@
 from rm_workflow.stages.repositories import StageRepository
-from rm_workflow.validation.category_schemas import GraphValidationError, validate_node_data
+from rm_workflow.validation.category_schemas import (
+    GraphValidationError,
+    validate_node_data,
+)
 from rm_workflow.workflows.models import WorkflowVersion
 
 
@@ -18,7 +21,9 @@ class GraphService:
 
     def validate(self, graph: dict) -> dict:
         if not isinstance(graph, dict):
-            raise GraphValidationError("graph must be an object with 'nodes' and 'edges'")
+            raise GraphValidationError(
+                "graph must be an object with 'nodes' and 'edges'"
+            )
 
         nodes = graph.get("nodes", [])
         edges = graph.get("edges", [])
@@ -33,7 +38,9 @@ class GraphService:
             if node_id in node_ids:
                 raise GraphValidationError(f"Duplicate node id '{node_id}'")
             node_ids.add(node_id)
-            validate_node_data(node.get("category"), node.get("data", {}))
+            validate_node_data(
+                node.get("data", {}).get("category"), node.get("data", {})
+            )
 
         edge_ids: set[str] = set()
         for edge in edges:
@@ -80,7 +87,9 @@ class StageService:
     def list_stages(self, tenant_id: str, workflow_version: WorkflowVersion):
         return self.stages.list_for_version(tenant_id, workflow_version)
 
-    def get_stage(self, tenant_id: str, workflow_version: WorkflowVersion, public_id: str):
+    def get_stage(
+        self, tenant_id: str, workflow_version: WorkflowVersion, public_id: str
+    ):
         stage = self.stages.get_by_public_id(tenant_id, workflow_version, public_id)
         if stage is None:
             raise StageServiceError("Stage not found")

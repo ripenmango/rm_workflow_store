@@ -71,6 +71,17 @@ class StageRepository:
         Used for both create-time bootstrap (§10) and copy-on-publish
         (VersionService.publish) -- stages_data items are plain dicts with
         name/description/order/graph keys, already validated by the caller.
+
+        Deliberately loops and calls .save() per stage instead of
+        Stage.objects.bulk_create() -- bulk_create() issues a single raw
+        INSERT and never calls Model.save() per instance, which silently
+        skips RMAuditModel.save() (created_by/updated_by -- NOT NULL on this
+        model, so this surfaces immediately as an IntegrityError),
+        RMPublicIdModel.save() (public_id generation -- this one does NOT
+        surface as an error, it just leaves public_id unset), and this
+        model's own tenant_id-sync save() override. Stage counts here are
+        always small (one workflow's worth of stages), so the N-query cost
+        is negligible next to correctness.
         """
         stages = [
             Stage(
@@ -83,4 +94,6 @@ class StageRepository:
             )
             for index, data in enumerate(stages_data)
         ]
-        return Stage.objects.bulk_create(stages)
+        for stage in stages:
+            stage.save()
+        return stages

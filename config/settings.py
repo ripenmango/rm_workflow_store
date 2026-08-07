@@ -25,6 +25,10 @@ from pathlib import Path
 
 import rm_auth_tenant
 from drf_base_app.logging.config import setup as configure_logging
+from drf_base_app.tenancy.settings import (
+    get_default_persona_name,
+    get_default_tenant_id,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -200,28 +204,38 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # (all wired into MIDDLEWARE/REST_FRAMEWORK above). Mirrors rm_auth_tenant's
 # own harness settings.py; see that file for the full key-by-key rationale.
 # ---------------------------------------------------------------------------
-RM_AUTH = {
-    "JWT_ACCESS_TTL_SECONDS": int(os.environ.get("RM_AUTH_ACCESS_TTL", "900")),
-    "JWT_REFRESH_TTL_SECONDS": int(
-        os.environ.get("RM_AUTH_REFRESH_TTL", str(60 * 60 * 24 * 7))
-    ),
-    "DEFAULT_ALGORITHM": os.environ.get("RM_AUTH_DEFAULT_ALGORITHM", "HS256"),
-    "DEFAULT_SIGNING_SECRET": os.environ.get(
-        "RM_AUTH_HS256_SECRET", "dev-only-hs256-secret"
-    ),
-    "CASBIN_MODEL_PATH": str(RM_AUTH_TENANT_DIR / "policy" / "casbin_model.conf"),
-    "ENFORCER_CACHE_TTL_SECONDS": int(os.environ.get("RM_AUTH_ENFORCER_TTL", "300")),
-    "DEFAULT_TENANT_ID": os.environ.get("RM_AUTH_DEFAULT_TENANT_ID", "default"),
-    "DEFAULT_PERSONA_NAME": os.environ.get("RM_AUTH_DEFAULT_PERSONA_NAME", "Default"),
-    "SIGNUP_EMAIL_VERIFICATION_ENABLED": os.environ.get(
-        "RM_AUTH_SIGNUP_EMAIL_VERIFICATION_ENABLED", "false"
-    ).lower()
-    == "true",
-    "EMAIL_VERIFICATION_TTL_SECONDS": int(
-        os.environ.get("RM_AUTH_EMAIL_VERIFICATION_TTL", str(60 * 60 * 24 * 3))
-    ),
-    "EMAIL_VERIFICATION_URL": os.environ.get(
-        "RM_AUTH_EMAIL_VERIFICATION_URL",
-        "http://localhost:3000/verify-email?token={token}",
-    ),
+# RM_AUTH = {
+#     "JWT_ACCESS_TTL_SECONDS": int(os.environ.get("RM_AUTH_ACCESS_TTL", "900")),
+#     "JWT_REFRESH_TTL_SECONDS": int(
+#         os.environ.get("RM_AUTH_REFRESH_TTL", str(60 * 60 * 24 * 7))
+#     ),
+#     "DEFAULT_ALGORITHM": os.environ.get("RM_AUTH_DEFAULT_ALGORITHM", "HS256"),
+#     "DEFAULT_SIGNING_SECRET": os.environ.get(
+#         "RM_AUTH_HS256_SECRET", "dev-only-hs256-secret"
+#     ),
+#     "CASBIN_MODEL_PATH": str(RM_AUTH_TENANT_DIR / "policy" / "casbin_model.conf"),
+#     "ENFORCER_CACHE_TTL_SECONDS": int(os.environ.get("RM_AUTH_ENFORCER_TTL", "300")),
+#     "DEFAULT_TENANT_ID": get_default_tenant_id(),
+#     "DEFAULT_PERSONA_NAME": get_default_persona_name(),
+#     "SIGNUP_EMAIL_VERIFICATION_ENABLED": os.environ.get(
+#         "RM_AUTH_SIGNUP_EMAIL_VERIFICATION_ENABLED", "false"
+#     ).lower()
+#     == "true",
+#     "EMAIL_VERIFICATION_TTL_SECONDS": int(
+#         os.environ.get("RM_AUTH_EMAIL_VERIFICATION_TTL", str(60 * 60 * 24 * 3))
+#     ),
+#     "EMAIL_VERIFICATION_URL": os.environ.get(
+#         "RM_AUTH_EMAIL_VERIFICATION_URL",
+#         "http://localhost:3000/verify-email?token={token}",
+#     ),
+# }
+
+RM_AUTH_TENANT = {
+    "CASBIN_MODEL_PATH": str(
+        Path(__file__).resolve().parent.parent.parent
+        / "rm_auth_tenant"
+        / "rm_auth_tenant"
+        / "policy"
+        / "casbin_model.conf"
+    )
 }

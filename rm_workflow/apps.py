@@ -30,3 +30,22 @@ class RmWorkflowConfig(AppConfig):
         # therefore registered) by the time any Tenant is saved, regardless
         # of Django's app-loading order.
         from rm_workflow.tenants import models  # noqa: F401
+
+        # Purges EntityAccessGrant rows (rm_auth_tenant) if a Workspace/
+        # Workflow is ever hard-deleted -- see
+        # rm_auth_tenant.authorization.signals for why this is opt-in per
+        # model rather than automatic.
+        from rm_auth_tenant.authorization.signals import connect_hard_delete_cleanup
+        from rm_workflow.workflows.models import Workflow
+        from rm_workflow.workspaces.models import Workspace
+
+        connect_hard_delete_cleanup(Workspace, "workspace")
+        connect_hard_delete_cleanup(Workflow, "workflow")
+
+        # Registers check_every_view_declares_access against THIS service's
+        # own URL conf -- rm_workflow_store is a separate deployable service
+        # from rm_auth_tenant, with its own `manage.py check`/CI run, so the
+        # check (defined once in rm_auth_tenant since it's generic, no
+        # rm_auth_tenant-specific logic) needs importing here too, not just
+        # there -- see rm_auth_tenant/authorization/DESIGN.md.
+        from rm_auth_tenant import checks  # noqa: F401

@@ -1,9 +1,13 @@
 from django.db import transaction
-
+from drf_base_app.audit.context import AuditContext
+from rm_auth_tenant.authorization.access_scope import EntityAccessService
 from rm_workflow.services.graph_service import GraphService
 from rm_workflow.stages.repositories import StageRepository
 from rm_workflow.validation.category_schemas import GraphValidationError
-from rm_workflow.workflows.repositories import WorkflowRepository, WorkflowVersionRepository
+from rm_workflow.workflows.repositories import (
+    WorkflowRepository,
+    WorkflowVersionRepository,
+)
 from rm_workflow.workspaces.repositories import WorkspaceRepository
 
 
@@ -18,6 +22,12 @@ class WorkflowService:
     metadata (name/description) -- it never touches stage content, matching
     §5.1's "editing a workflow's name and editing a stage's canvas are two
     independent operations that can't race each other."
+
+    Plain tenant-scoped queries only -- no owner_id/scoping params. Every
+    method here assumes the caller has already been cleared to act on the
+    specific workspace/workflow public_id it's given (RMScopedModelViewSet's
+    filter backend + RequiresPermission.has_object_permission, both backed
+    by EntityAccessGrant -- see rm_auth_tenant's authorization/DESIGN.md).
     """
 
     def __init__(self):
@@ -69,6 +79,15 @@ class WorkflowService:
         workflow = self.workflows.create(
             tenant_id=tenant_id, workspace=workspace, name=name, description=description
         )
+        # Makes the creator this workflow's `owner` EntityAccessGrant, same
+        # transaction as the workflow row itself -- see
+        # WorkspaceService.create_workspace's identical pattern.
+        creator_id = AuditContext.get_user()
+        if creator_id is not None:
+            EntityAccessService().grant_owner(
+                tenant_id, "workflow", workflow.public_id, creator_id
+            )
+
         draft = self.versions.create_draft(tenant_id, workflow)
         self.workflows.set_current_version(workflow, draft)
 
@@ -80,9 +99,7 @@ class WorkflowService:
                         stage_data.get("graph") or {"nodes": [], "edges": []}
                     )
                 except GraphValidationError as exc:
-                    raise WorkflowServiceError(
-                        f"stages[{index}]: {exc}"
-                    ) from exc
+                    raise WorkflowServiceError(f"stages[{index}]: {exc}") from exc
                 bootstrap_stages.append(
                     {
                         "name": stage_data["name"],

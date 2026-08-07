@@ -6,6 +6,10 @@ class WorkspaceRepository:
     The only place in rm_workflow allowed to issue queries against
     Workspace. Services call this; api/views.py never imports Workspace
     directly (import-linter contract, §14).
+
+    Plain tenant_id-scoped queries only -- no owner_id filtering here.
+    Object-level scoping now happens upstream, before public_id lookups
+    like get_by_public_id ever run (see WorkspaceService's docstring).
     """
 
     def get_by_public_id(self, tenant_id: str, public_id: str) -> Workspace | None:
