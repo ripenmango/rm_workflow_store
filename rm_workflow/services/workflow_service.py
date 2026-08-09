@@ -44,10 +44,12 @@ class WorkflowService:
         return workspace
 
     def list_workflows(self, tenant_id: str, workspace_public_id: str | None = None):
-        workspace_id = None
+        resolved_workspace_public_id = None
         if workspace_public_id is not None:
-            workspace_id = self._require_workspace(tenant_id, workspace_public_id).id
-        return self.workflows.list(tenant_id, workspace_id=workspace_id)
+            resolved_workspace_public_id = self._require_workspace(
+                tenant_id, workspace_public_id
+            ).public_id
+        return self.workflows.list(tenant_id, workspace_public_id=resolved_workspace_public_id)
 
     def get_workflow(self, tenant_id: str, public_id: str):
         workflow = self.workflows.get_by_public_id(tenant_id, public_id)

@@ -25,7 +25,7 @@ class Stage(RMAuditModel, RMSoftDeleteModel, RMPublicIdModel):
     public_id_prefix = "stg"
 
     workflow_version = models.ForeignKey(
-        WorkflowVersion, on_delete=dj_models.CASCADE, related_name="stages"
+        WorkflowVersion, to_field="public_id", on_delete=dj_models.CASCADE, related_name="stages"
     )
     tenant_id = models.CharField(max_length=64, db_index=True)  # denormalized
     name = models.CharField(max_length=255)
