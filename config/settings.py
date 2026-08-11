@@ -52,6 +52,7 @@ SHARED_APPS = [
     "django_tenants",  # provides TenantMixin/DomainMixin used by rm_auth.tenants.models
     "django.contrib.contenttypes",
     "django.contrib.auth",  # kept only for Django admin/permission plumbing compatibility
+    "django.contrib.admin",  # /admin/ -- is_superuser-gated, platform-only NodeType catalog editing
     "django.contrib.staticfiles",
     "rest_framework",
     "drf_spectacular",

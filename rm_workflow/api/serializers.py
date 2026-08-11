@@ -2,6 +2,24 @@ from drf_base_app.rest_framework import serializers
 
 
 # ---------------------------------------------------------------------------
+# Node types
+# ---------------------------------------------------------------------------
+
+
+class NodeTypeSerializer(serializers.RMSerializer):
+    """Shaped to match rm_workflow_client's NodeDefinition interface exactly.
+    Internal public_id/tenant_id aren't exposed -- the frontend matches
+    purely on `type`."""
+
+    type = serializers.CharField()
+    label = serializers.CharField()
+    category = serializers.CharField()
+    icon = serializers.CharField()
+    description = serializers.CharField(required=False, default="", allow_blank=True)
+    properties_schema = serializers.JSONField()
+
+
+# ---------------------------------------------------------------------------
 # Workspaces
 # ---------------------------------------------------------------------------
 

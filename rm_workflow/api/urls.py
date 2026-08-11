@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.routers import SimpleRouter
 
 from rm_workflow.api.views import (
+    NodeTypeListView,
     PublishWorkflowView,
     StageDetailView,
     StageGraphView,
@@ -20,6 +21,7 @@ router.register("workflows", WorkflowViewSet, basename="rm_workflow_workflow")
 
 urlpatterns = [
     *router.urls,
+    path("node-types", NodeTypeListView.as_view(), name="rm_workflow_node_type_list"),
     path(
         "workflows/<str:workflow_id>/publish",
         PublishWorkflowView.as_view(),

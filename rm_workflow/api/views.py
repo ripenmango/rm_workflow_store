@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.permissions import IsAuthenticated
 
 from drf_base_app.rest_framework import Response
 from drf_base_app.swagger.decorators import rm_swagger
@@ -17,6 +18,7 @@ from rm_workflow.api.serializers import (
     CreateStageSerializer,
     CreateWorkflowSerializer,
     CreateWorkspaceSerializer,
+    NodeTypeSerializer,
     ShareWorkflowSerializer,
     StageGraphSerializer,
     StageSerializer,
@@ -29,6 +31,7 @@ from rm_workflow.api.serializers import (
     WorkflowVersionSerializer,
     WorkspaceSerializer,
 )
+from rm_workflow.services.node_type_service import NodeTypeService
 from rm_workflow.services.graph_service import (
     GraphValidationError,
     StageService,
@@ -99,6 +102,46 @@ def _get_stage_or_404(request, workflow_version, stage_id: str):
         return StageService().get_stage(_tenant_id(request), workflow_version, stage_id)
     except StageServiceError as exc:
         raise NotFound(str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Node types
+# ---------------------------------------------------------------------------
+
+
+class NodeTypeListView(RMAPIView):
+    """
+    GET /api/workflow/node-types
+
+    The workflow builder palette's data source -- global catalog entries
+    plus this tenant's own, minus any tenant-level disabling override (see
+    NodeType/TenantNodeTypeSetting docstrings). Read-only: editing the
+    catalog itself is a Django admin (/admin/) operation, not an API one --
+    see NodeType's model docstring for why.
+
+    permission_classes is deliberately just IsAuthenticated, NOT
+    RequiresPermission("node_type", "view") -- this is reference/catalog
+    data every tenant and every role should see (it's what populates the
+    palette; there's no scenario where an authenticated user shouldn't be
+    able to list it), so gating it behind a per-tenant Casbin grant was the
+    wrong model: any tenant/role lacking that specific grant got a 403
+    with no self-service fix. TenantNodeTypeSetting (admin-managed) is
+    still what controls which entries actually come back for a given
+    tenant -- this permission is only about "can you call the endpoint at
+    all", which is now "yes, if you're logged in".
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @rm_swagger(
+        summary="List node types available to the current tenant",
+        success=NodeTypeSerializer(many=True),
+        tags=["Node Types"],
+        auth=["Bearer"],
+    )
+    def get(self, request):
+        node_types = NodeTypeService().list_available(_tenant_id(request))
+        return Response(NodeTypeSerializer(node_types, many=True).data)
 
 
 # ---------------------------------------------------------------------------

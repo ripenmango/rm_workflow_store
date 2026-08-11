@@ -7,7 +7,7 @@ from drf_spectacular.views import (
 )
 
 urlpatterns = [
-    # path("admin/", admin.site.urls),
+    path("admin/", admin.site.urls),
     path("api/rm_auth_tenant/", include("rm_auth_tenant.api.urls")),
     path("api/workflow/", include("rm_workflow.api.urls")),
     path(
