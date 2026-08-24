@@ -1,9 +1,9 @@
 from django.db import models as dj_models
-
 from drf_base_app import models
 from drf_base_app.models.base import RMAuditModel, RMPublicIdModel, RMSoftDeleteModel
 from drf_base_app.models.indexes import Index as ActiveIndex
 
+from rm_workflow.projects.models import Project
 from rm_workflow.workspaces.models import Workspace
 
 
@@ -18,7 +18,18 @@ class Workflow(RMAuditModel, RMSoftDeleteModel, RMPublicIdModel):
     public_id_prefix = "wrf"
 
     workspace = models.ForeignKey(
-        Workspace, to_field="public_id", on_delete=dj_models.CASCADE, related_name="workflows"
+        Workspace,
+        to_field="public_id",
+        on_delete=dj_models.CASCADE,
+        related_name="workflows",
+    )
+    project = models.ForeignKey(
+        Project,
+        to_field="public_id",
+        null=True,
+        blank=True,
+        on_delete=dj_models.SET_NULL,
+        related_name="workflows",
     )
     # Denormalized from workspace.tenant_id, kept in sync at write time
     # (§5.2) -- see save() below.
@@ -71,7 +82,10 @@ class WorkflowVersion(RMAuditModel, RMPublicIdModel):
     public_id_prefix = "wfv"
 
     workflow = models.ForeignKey(
-        Workflow, to_field="public_id", on_delete=dj_models.CASCADE, related_name="versions"
+        Workflow,
+        to_field="public_id",
+        on_delete=dj_models.CASCADE,
+        related_name="versions",
     )
     tenant_id = models.CharField(max_length=64, db_index=True)  # denormalized
     version_number = models.PositiveIntegerField()  # monotonic per workflow

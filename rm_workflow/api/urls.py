@@ -3,6 +3,7 @@ from rest_framework.routers import SimpleRouter
 
 from rm_workflow.api.views import (
     NodeTypeListView,
+    ProjectViewSet,
     PublishWorkflowView,
     StageDetailView,
     StageGraphView,
@@ -16,6 +17,7 @@ from rm_workflow.api.views import (
 
 # trailing_slash=False to match rm_auth_tenant's own convention.
 router = SimpleRouter(trailing_slash=False)
+router.register("projects", ProjectViewSet, basename="rm_workflow_project")
 router.register("workspaces", WorkspaceViewSet, basename="rm_workflow_workspace")
 router.register("workflows", WorkflowViewSet, basename="rm_workflow_workflow")
 

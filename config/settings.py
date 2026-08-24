@@ -64,6 +64,7 @@ SHARED_APPS = [
 TENANT_APPS = [
     "rm_auth_tenant",  # tenant-scoped identity -- dependency, not this repo's code
     "rm_workflow",  # this repo
+    "rm_connection",  # dependency of rm_workflow -- not this repo's code
 ]
 
 INSTALLED_APPS = list(SHARED_APPS) + [

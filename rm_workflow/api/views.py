@@ -1,12 +1,11 @@
-from rest_framework import serializers
-from rest_framework.exceptions import NotFound, ValidationError
-from rest_framework.permissions import IsAuthenticated
-
 from drf_base_app.rest_framework import Response
 from drf_base_app.swagger.decorators import rm_swagger
 from drf_base_app.swagger.responses import error_response
+from drf_base_app.utils import handle_api_exception
 from drf_base_app.views import RMAPIView
-
+from rest_framework import serializers
+from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rm_auth_tenant.authorization.access_scope import (
     EntityAccessError,
     EntityAccessService,
@@ -14,15 +13,19 @@ from rm_auth_tenant.authorization.access_scope import (
 )
 from rm_auth_tenant.authorization.policy_permission import RequiresPermission
 from rm_auth_tenant.authorization.viewsets import RMScopedModelViewSet
+
 from rm_workflow.api.serializers import (
+    CreateProjectSerializer,
     CreateStageSerializer,
     CreateWorkflowSerializer,
     CreateWorkspaceSerializer,
     NodeTypeSerializer,
+    ProjectSerializer,
     ShareWorkflowSerializer,
     StageGraphSerializer,
     StageSerializer,
     StageSummarySerializer,
+    UpdateProjectSerializer,
     UpdateStageMetadataSerializer,
     UpdateWorkflowSerializer,
     UpdateWorkspaceSerializer,
@@ -31,16 +34,19 @@ from rm_workflow.api.serializers import (
     WorkflowVersionSerializer,
     WorkspaceSerializer,
 )
-from rm_workflow.services.node_type_service import NodeTypeService
 from rm_workflow.services.graph_service import (
     GraphValidationError,
     StageService,
     StageServiceError,
 )
+from rm_workflow.services.node_type_service import NodeTypeService
+from rm_workflow.services.project_service import (
+    ProjectService,
+    ProjectServiceError,
+)
 from rm_workflow.services.version_service import VersionService, VersionServiceError
 from rm_workflow.services.workflow_service import WorkflowService, WorkflowServiceError
 from rm_workflow.services.workspace_service import WorkspaceService
-from drf_base_app.utils import handle_api_exception
 
 
 def _tenant_id(request) -> str:
@@ -142,6 +148,111 @@ class NodeTypeListView(RMAPIView):
     def get(self, request):
         node_types = NodeTypeService().list_available(_tenant_id(request))
         return Response(NodeTypeSerializer(node_types, many=True).data)
+
+
+# ---------------------------------------------------------------------------
+# Projects
+# ---------------------------------------------------------------------------
+
+
+class ProjectViewSet(RMScopedModelViewSet):
+    """/api/workflow/projects, /api/workflow/projects/<project_id>"""
+
+    entity_type = "project"
+    permission_classes = [RequiresPermission("project", "manage")]
+    lookup_url_kwarg = "project_id"
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return CreateProjectSerializer
+        if self.action in ("update", "partial_update"):
+            return UpdateProjectSerializer
+        return ProjectSerializer
+
+    def get_queryset(self):
+        return ProjectService().list_projects(
+            _tenant_id(self.request), self.request.query_params.get("workspace")
+        )
+
+    @rm_swagger(
+        summary="List projects for the current tenant",
+        description="Optionally filter by `?workspace=<workspace_id>`.",
+        success=ProjectSerializer(many=True),
+        tags=["Projects"],
+        auth=["Bearer"],
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @rm_swagger(
+        summary="Retrieve a project",
+        success=ProjectSerializer,
+        responses={404: error_response("Project not found.")},
+        tags=["Projects"],
+        auth=["Bearer"],
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @rm_swagger(
+        summary="Create a project container",
+        request=CreateProjectSerializer,
+        success=ProjectSerializer,
+        responses={404: error_response("Workspace not found.")},
+        tags=["Projects"],
+        auth=["Bearer"],
+    )
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        _check_entity_access(request, "workspace", data["workspace"], "edit")
+        try:
+            project = ProjectService().create_project(
+                _tenant_id(request),
+                workspace_public_id=data["workspace"],
+                name=data["name"],
+                description=data.get("description", ""),
+            )
+        except ProjectServiceError as exc:
+            raise NotFound(str(exc))
+        return Response(ProjectSerializer(project).data, status=201)
+
+    @rm_swagger(
+        summary="Update a project",
+        request=UpdateProjectSerializer,
+        success=ProjectSerializer,
+        responses={404: error_response("Project not found.")},
+        tags=["Projects"],
+        auth=["Bearer"],
+    )
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(
+            data=request.data, partial=kwargs.get("partial", False)
+        )
+        serializer.is_valid(raise_exception=True)
+        project = ProjectService().update_project(
+            _tenant_id(request), instance.public_id, **serializer.validated_data
+        )
+        return Response(ProjectSerializer(project).data)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+
+    @rm_swagger(
+        summary="Delete a project",
+        description="Soft-deletes the project. Its flows are preserved.",
+        success={"deleted": serializers.BooleanField()},
+        responses={404: error_response("Project not found.")},
+        tags=["Projects"],
+        auth=["Bearer"],
+    )
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        ProjectService().delete_project(_tenant_id(request), instance.public_id)
+        return Response({"deleted": True})
 
 
 # ---------------------------------------------------------------------------
@@ -286,11 +397,17 @@ class WorkflowViewSet(RMScopedModelViewSet):
 
     def get_queryset(self):
         workspace_id = self.request.query_params.get("workspace")
-        return WorkflowService().list_workflows(_tenant_id(self.request), workspace_id)
+        project_id = self.request.query_params.get("project")
+        return WorkflowService().list_workflows(
+            _tenant_id(self.request), workspace_id, project_id
+        )
 
     @rm_swagger(
         summary="List workflows for the current tenant",
-        description="Optionally filter by `?workspace=<workspace_id>`.",
+        description=(
+            "Optionally filter by `?workspace=<workspace_id>` or "
+            "`?project=<project_id>`."
+        ),
         success=WorkflowSerializer(many=True),
         tags=["Workflows"],
         auth=["Bearer"],
@@ -339,6 +456,8 @@ class WorkflowViewSet(RMScopedModelViewSet):
         # that belongs to someone else, same not-found-vs-forbidden posture
         # as everywhere else in this file.
         _check_entity_access(request, "workspace", data["workspace"], "edit")
+        if data.get("project") is not None:
+            _check_entity_access(request, "project", data["project"], "edit")
 
         try:
             workflow = WorkflowService().create_workflow(
@@ -347,10 +466,11 @@ class WorkflowViewSet(RMScopedModelViewSet):
                 name=data["name"],
                 description=data.get("description", ""),
                 stages=data.get("stages") or [],
+                project_public_id=data.get("project"),
             )
         except WorkflowServiceError as exc:
             message = str(exc)
-            if message == "Workspace not found":
+            if message in {"Workspace not found", "Project not found"}:
                 raise NotFound(message)
             raise ValidationError(message)
 
@@ -372,9 +492,22 @@ class WorkflowViewSet(RMScopedModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
 
-        workflow = WorkflowService().update_workflow(
-            _tenant_id(request), instance.public_id, **serializer.validated_data
-        )
+        if (
+            "project" in serializer.validated_data
+            and serializer.validated_data["project"] is not None
+        ):
+            _check_entity_access(
+                request, "project", serializer.validated_data["project"], "edit"
+            )
+
+        try:
+            workflow = WorkflowService().update_workflow(
+                _tenant_id(request), instance.public_id, **serializer.validated_data
+            )
+        except WorkflowServiceError as exc:
+            if str(exc) == "Project not found":
+                raise NotFound(str(exc))
+            raise ValidationError(str(exc))
         return Response(WorkflowSerializer(workflow).data)
 
     def partial_update(self, request, *args, **kwargs):

@@ -9,6 +9,7 @@ from drf_spectacular.views import (
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/rm_auth_tenant/", include("rm_auth_tenant.api.urls")),
+    path("api/connections/", include("rm_connection.api.urls")),
     path("api/workflow/", include("rm_workflow.api.urls")),
     path(
         "api/docs/swagger.json",

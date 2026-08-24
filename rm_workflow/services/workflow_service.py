@@ -1,6 +1,8 @@
 from django.db import transaction
 from drf_base_app.audit.context import AuditContext
 from rm_auth_tenant.authorization.access_scope import EntityAccessService
+
+from rm_workflow.projects.repositories import ProjectRepository
 from rm_workflow.services.graph_service import GraphService
 from rm_workflow.stages.repositories import StageRepository
 from rm_workflow.validation.category_schemas import GraphValidationError
@@ -34,6 +36,7 @@ class WorkflowService:
         self.workflows = WorkflowRepository()
         self.versions = WorkflowVersionRepository()
         self.workspaces = WorkspaceRepository()
+        self.projects = ProjectRepository()
         self.stages = StageRepository()
         self.graph = GraphService()
 
@@ -43,13 +46,33 @@ class WorkflowService:
             raise WorkflowServiceError("Workspace not found")
         return workspace
 
-    def list_workflows(self, tenant_id: str, workspace_public_id: str | None = None):
+    def _require_project(self, tenant_id: str, project_public_id: str):
+        project = self.projects.get_by_public_id(tenant_id, project_public_id)
+        if project is None:
+            raise WorkflowServiceError("Project not found")
+        return project
+
+    def list_workflows(
+        self,
+        tenant_id: str,
+        workspace_public_id: str | None = None,
+        project_public_id: str | None = None,
+    ):
         resolved_workspace_public_id = None
         if workspace_public_id is not None:
             resolved_workspace_public_id = self._require_workspace(
                 tenant_id, workspace_public_id
             ).public_id
-        return self.workflows.list(tenant_id, workspace_public_id=resolved_workspace_public_id)
+        resolved_project_public_id = None
+        if project_public_id is not None:
+            resolved_project_public_id = self._require_project(
+                tenant_id, project_public_id
+            ).public_id
+        return self.workflows.list(
+            tenant_id,
+            workspace_public_id=resolved_workspace_public_id,
+            project_public_id=resolved_project_public_id,
+        )
 
     def get_workflow(self, tenant_id: str, public_id: str):
         workflow = self.workflows.get_by_public_id(tenant_id, public_id)
@@ -65,6 +88,7 @@ class WorkflowService:
         name: str,
         description: str = "",
         stages: list[dict] | None = None,
+        project_public_id: str | None = None,
     ):
         """
         Creates a Workflow + its first draft WorkflowVersion together. The
@@ -77,9 +101,20 @@ class WorkflowService:
         StageService.update_graph() (graph), one stage at a time.
         """
         workspace = self._require_workspace(tenant_id, workspace_public_id)
+        project = None
+        if project_public_id is not None:
+            project = self._require_project(tenant_id, project_public_id)
+            if project.workspace_id != workspace.public_id:
+                raise WorkflowServiceError(
+                    "Project must belong to the workflow workspace"
+                )
 
         workflow = self.workflows.create(
-            tenant_id=tenant_id, workspace=workspace, name=name, description=description
+            tenant_id=tenant_id,
+            workspace=workspace,
+            project=project,
+            name=name,
+            description=description,
         )
         # Makes the creator this workflow's `owner` EntityAccessGrant, same
         # transaction as the workflow row itself -- see
@@ -115,9 +150,20 @@ class WorkflowService:
         return workflow
 
     def update_workflow(self, tenant_id: str, public_id: str, **fields):
-        # Metadata only -- name/description. Never touches stages.
+        # Metadata/project membership only. Never touches stages.
         fields.pop("stages", None)
         workflow = self.get_workflow(tenant_id, public_id)
+        if "project" in fields:
+            project_public_id = fields["project"]
+            if project_public_id is None:
+                fields["project"] = None
+            else:
+                project = self._require_project(tenant_id, project_public_id)
+                if project.workspace_id != workflow.workspace_id:
+                    raise WorkflowServiceError(
+                        "Project must belong to the workflow workspace"
+                    )
+                fields["project"] = project
         return self.workflows.update(workflow, **fields)
 
     def delete_workflow(self, tenant_id: str, public_id: str) -> None:

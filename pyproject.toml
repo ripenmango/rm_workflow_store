@@ -17,6 +17,7 @@ dependencies = [
     "jsonschema>=4.20",     # per-category node `data` validation (§8/§9)
     "django-tenants>=3.6",  # Tier B isolation (schema-per-tenant) -- see the "Tier B Implementation Plan" doc
     "rm-auth-tenant @ file:///Users/lsharma/personal/rm_auth_tenant/dist/rm_auth_tenant-0.1.0-py3-none-any.whl",
+    "rm-connection @ file:///Users/lsharma/personal/rm_connection_manager/dist/rm_connection-0.1.0-py3-none-any.whl",
 ]
 
 [project.optional-dependencies]

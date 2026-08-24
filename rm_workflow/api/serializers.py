@@ -1,6 +1,5 @@
 from drf_base_app.rest_framework import serializers
 
-
 # ---------------------------------------------------------------------------
 # Node types
 # ---------------------------------------------------------------------------
@@ -38,6 +37,31 @@ class CreateWorkspaceSerializer(serializers.RMSerializer):
 
 
 class UpdateWorkspaceSerializer(serializers.RMSerializer):
+    name = serializers.CharField(required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
+
+
+# ---------------------------------------------------------------------------
+# Projects
+# ---------------------------------------------------------------------------
+
+
+class ProjectSerializer(serializers.RMSerializer):
+    public_id = serializers.CharField(read_only=True)
+    workspace = serializers.CharField(source="workspace.public_id", read_only=True)
+    name = serializers.CharField()
+    description = serializers.CharField(required=False, default="", allow_blank=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
+
+
+class CreateProjectSerializer(serializers.RMSerializer):
+    workspace = serializers.CharField()
+    name = serializers.CharField()
+    description = serializers.CharField(required=False, default="", allow_blank=True)
+
+
+class UpdateProjectSerializer(serializers.RMSerializer):
     name = serializers.CharField(required=False)
     description = serializers.CharField(required=False, allow_blank=True)
 
@@ -120,6 +144,9 @@ class WorkflowVersionSerializer(serializers.RMSerializer):
 class WorkflowSerializer(serializers.RMSerializer):
     public_id = serializers.CharField(read_only=True)
     workspace = serializers.CharField(source="workspace.public_id", read_only=True)
+    project = serializers.CharField(
+        source="project.public_id", read_only=True, allow_null=True
+    )
     name = serializers.CharField()
     description = serializers.CharField(required=False, default="", allow_blank=True)
     current_version = serializers.CharField(
@@ -133,6 +160,9 @@ class CreateWorkflowSerializer(serializers.RMSerializer):
     name = serializers.CharField()
     description = serializers.CharField(required=False, default="", allow_blank=True)
     workspace = serializers.CharField()  # Workspace public_id
+    project = serializers.CharField(
+        required=False, allow_null=True
+    )  # Project public_id
     # Create-time-only bootstrap allowance (§10) -- does NOT reopen a
     # whole-document write path for later edits; see StageViewSet /
     # StageGraphView for the ongoing per-stage paths.
@@ -143,6 +173,7 @@ class UpdateWorkflowSerializer(serializers.RMSerializer):
     # Metadata only -- name/description. Never touches stages (§5.1/§10).
     name = serializers.CharField(required=False)
     description = serializers.CharField(required=False, allow_blank=True)
+    project = serializers.CharField(required=False, allow_null=True)
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +184,9 @@ class UpdateWorkflowSerializer(serializers.RMSerializer):
 
 class WorkflowCollaboratorSerializer(serializers.RMSerializer):
     user_id = serializers.IntegerField(read_only=True)
-    role = serializers.ChoiceField(read_only=True, choices=["viewer", "editor", "owner"])
+    role = serializers.ChoiceField(
+        read_only=True, choices=["viewer", "editor", "owner"]
+    )
     created_at = serializers.DateTimeField(read_only=True)
 
 

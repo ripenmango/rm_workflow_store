@@ -15,17 +15,35 @@ class WorkflowRepository:
     def get_by_id(self, tenant_id: str, workflow_id: int) -> Workflow | None:
         return Workflow.objects.filter(tenant_id=tenant_id, id=workflow_id).first()
 
-    def list(self, tenant_id: str, workspace_public_id: str | None = None):
+    def list(
+        self,
+        tenant_id: str,
+        workspace_public_id: str | None = None,
+        project_public_id: str | None = None,
+    ):
         qs = Workflow.objects.filter(tenant_id=tenant_id)
         if workspace_public_id is not None:
             # workspace_id column now stores Workspace.public_id (FK
             # to_field), not the integer PK -- filter by that directly.
             qs = qs.filter(workspace_id=workspace_public_id)
+        if project_public_id is not None:
+            qs = qs.filter(project_id=project_public_id)
         return qs.order_by("name")
 
-    def create(self, tenant_id: str, workspace, name: str, description: str = "") -> Workflow:
+    def create(
+        self,
+        tenant_id: str,
+        workspace,
+        name: str,
+        description: str = "",
+        project=None,
+    ) -> Workflow:
         return Workflow.objects.create(
-            tenant_id=tenant_id, workspace=workspace, name=name, description=description
+            tenant_id=tenant_id,
+            workspace=workspace,
+            project=project,
+            name=name,
+            description=description,
         )
 
     def update(self, workflow: Workflow, **fields) -> Workflow:
@@ -37,7 +55,9 @@ class WorkflowRepository:
     def soft_delete(self, workflow: Workflow) -> None:
         workflow.delete()
 
-    def set_current_version(self, workflow: Workflow, version: WorkflowVersion) -> Workflow:
+    def set_current_version(
+        self, workflow: Workflow, version: WorkflowVersion
+    ) -> Workflow:
         workflow.current_version = version
         workflow.save(update_fields=["current_version"])
         return workflow

@@ -29,17 +29,19 @@ class RmWorkflowConfig(AppConfig):
         # just guarantees rm_workflow's mirror model has been imported (and
         # therefore registered) by the time any Tenant is saved, regardless
         # of Django's app-loading order.
-        from rm_workflow.tenants import models  # noqa: F401
-
         # Purges EntityAccessGrant rows (rm_auth_tenant) if a Workspace/
         # Workflow is ever hard-deleted -- see
         # rm_auth_tenant.authorization.signals for why this is opt-in per
         # model rather than automatic.
         from rm_auth_tenant.authorization.signals import connect_hard_delete_cleanup
+
+        from rm_workflow.projects.models import Project
+        from rm_workflow.tenants import models  # noqa: F401
         from rm_workflow.workflows.models import Workflow
         from rm_workflow.workspaces.models import Workspace
 
         connect_hard_delete_cleanup(Workspace, "workspace")
+        connect_hard_delete_cleanup(Project, "project")
         connect_hard_delete_cleanup(Workflow, "workflow")
 
         # Registers check_every_view_declares_access against THIS service's
