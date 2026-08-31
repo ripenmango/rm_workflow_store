@@ -36,6 +36,7 @@ class StageRepository:
         order: int | None = None,
         description: str = "",
         graph: dict | None = None,
+        required_form_id: str | None = None,
     ) -> Stage:
         return Stage.objects.create(
             tenant_id=tenant_id,
@@ -44,6 +45,13 @@ class StageRepository:
             description=description,
             order=self.next_order(workflow_version) if order is None else order,
             graph=graph or {"nodes": [], "edges": []},
+            # Loose public_id reference (SS18 "Direction 2", Phase 5) --
+            # passed straight through, never validated here; see
+            # Stage.required_form_id's own field comment for why this
+            # repository (query/write layer only, per import-linter's
+            # api -> services -> repositories -> models contract) is not
+            # where any such validation could live even in principle.
+            required_form_id=required_form_id,
         )
 
     def update_metadata(self, stage: Stage, **fields) -> Stage:
@@ -91,6 +99,10 @@ class StageRepository:
                 description=data.get("description", ""),
                 order=data.get("order", index),
                 graph=data.get("graph") or {"nodes": [], "edges": []},
+                # SS18 "Direction 2", Phase 5 -- carried through bootstrap
+                # and copy-on-publish the same as every other field here;
+                # absent from most stages_data dicts (defaults to None).
+                required_form_id=data.get("required_form_id"),
             )
             for index, data in enumerate(stages_data)
         ]

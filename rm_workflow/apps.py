@@ -29,6 +29,22 @@ class RmWorkflowConfig(AppConfig):
         # just guarantees rm_workflow's mirror model has been imported (and
         # therefore registered) by the time any Tenant is saved, regardless
         # of Django's app-loading order.
+        #
+        # The reverse direction: rm_workflow OWNS Workspace and Project, so
+        # unlike Tenant above, THIS app is the one that decides the
+        # mirror-sync wiring exists for consuming apps (e.g. rm_form_store --
+        # see its Architecture & Design doc, SS17) that keep local, thin
+        # mirrors of these two models. Connects the real post_save signal
+        # against rm_workflow's own Workspace/Project model classes;
+        # consuming apps only ever need to register a mirror model, never
+        # connect this signal themselves.
+        from drf_base_app.tenancy.sync import (
+            connect_project_mirror_signal,
+            connect_workspace_mirror_signal,
+        )
+
+        connect_workspace_mirror_signal()
+        connect_project_mirror_signal()
         # Purges EntityAccessGrant rows (rm_auth_tenant) if a Workspace/
         # Workflow is ever hard-deleted -- see
         # rm_auth_tenant.authorization.signals for why this is opt-in per

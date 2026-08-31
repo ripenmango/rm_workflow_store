@@ -32,6 +32,31 @@ class Stage(RMAuditModel, RMSoftDeleteModel, RMPublicIdModel):
     description = models.TextField(blank=True, default="")
     order = models.PositiveIntegerField()  # tab ordering
     graph = models.JSONField(default=dict)  # {"nodes": [...], "edges": [...]}
+    # Form <-> Workflow integration (rm_form_store Architecture & Design doc
+    # SS18 "Direction 2", this codebase's own Phase 5). A plain,
+    # unconstrained public_id reference to a Form in rm_form_store (prefix
+    # "frm"), NOT a real FK -- rm_workflow_store must not import
+    # rm_form_store (import-linter's cross-package boundary is a hard
+    # contract), and there is no local mirror table for Form the way
+    # Form.workspace/Form.project mirror INTO rm_form_store from the other
+    # direction, so a real FK is not an option here regardless of any
+    # policy preference. NULL means "this stage has no attached form" (the
+    # ordinary case for the overwhelming majority of stages).
+    #
+    # Deliberately validated NOWHERE inside this package: SS18 frames
+    # Stage<->Form as two independent aggregates that reference each other
+    # by public_id, checked (if at all) at the point each is authored --
+    # and "the point a Stage is authored" is a client that already holds
+    # both a workflow-store session and a form-store session (today, the
+    # frontend composing both APIs; there is no in-process caller that
+    # could check "does this Form exist and is it published" without
+    # exactly the cross-package coupling import-linter exists to forbid).
+    # This is called out explicitly, not silently assumed safe -- an
+    # authored Stage can reference a Form public_id that is later archived,
+    # deleted, or never existed at all, and rm_workflow_store has no way to
+    # know. Revisit if/when a service-to-service validation call (HTTP, not
+    # a Python import) is worth the added runtime coupling.
+    required_form_id = models.CharField(max_length=64, null=True, blank=True)
 
     class Meta:
         app_label = "rm_workflow"
@@ -40,6 +65,14 @@ class Stage(RMAuditModel, RMSoftDeleteModel, RMPublicIdModel):
         indexes = [
             ActiveIndex(fields=["tenant_id", "workflow_version"]),
             jsonb_gin_index("graph"),
+            # Lets a future "which stages require Form X" lookup (e.g. an
+            # admin tool warning before a Form is archived) avoid a
+            # sequential scan -- no in-process caller does this query yet
+            # (see field-level comment above on why cross-package
+            # validation isn't performed here), but the index costs
+            # nothing to add now and the column is already sparse (mostly
+            # NULL).
+            ActiveIndex(fields=["tenant_id", "required_form_id"]),
         ]
 
     def __str__(self) -> str:

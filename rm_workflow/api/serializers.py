@@ -77,18 +77,32 @@ class StageSerializer(serializers.RMSerializer):
     description = serializers.CharField(required=False, default="", allow_blank=True)
     order = serializers.IntegerField()
     graph = serializers.JSONField()
+    # rm_form_store Architecture & Design doc SS18 "Direction 2", this
+    # codebase's own Phase 5 -- a loose public_id string, not a nested
+    # representation, since rm_workflow_store has no Form data of its own
+    # to nest (see Stage.required_form_id's own field comment).
+    required_form_id = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
 
 
 class StageSummarySerializer(serializers.RMSerializer):
     """Used in stage list views -- omits `graph` (§7: the graph JSON is
-    fetched per-stage, on demand, not as part of a bulk listing)."""
+    fetched per-stage, on demand, not as part of a bulk listing).
+    `required_form_id` IS included here, unlike `graph` -- it's a cheap
+    scalar (not a heavy JSON blob), and a BPM list UI wanting to flag "this
+    stage requires a form" shouldn't need a second round-trip per stage to
+    find out (Phase 5)."""
 
     public_id = serializers.CharField(read_only=True)
     name = serializers.CharField()
     description = serializers.CharField(required=False, default="", allow_blank=True)
     order = serializers.IntegerField()
+    required_form_id = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
 
@@ -98,14 +112,22 @@ class CreateStageSerializer(serializers.RMSerializer):
     description = serializers.CharField(required=False, default="", allow_blank=True)
     order = serializers.IntegerField(required=False)
     graph = serializers.JSONField(required=False, default=dict)
+    required_form_id = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
 
 
 class UpdateStageMetadataSerializer(serializers.RMSerializer):
     # Metadata only -- never `graph` (§10: graph edits go through the
-    # dedicated PUT .../graph endpoint below).
+    # dedicated PUT .../graph endpoint below). `required_form_id` counts as
+    # metadata here, same reasoning as name/description/order -- it's an
+    # attribute of the stage itself, not part of the node/edge document.
     name = serializers.CharField(required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     order = serializers.IntegerField(required=False)
+    required_form_id = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
 
 
 class StageGraphSerializer(serializers.RMSerializer):
@@ -121,6 +143,9 @@ class BootstrapStageSerializer(serializers.RMSerializer):
     description = serializers.CharField(required=False, default="", allow_blank=True)
     order = serializers.IntegerField(required=False)
     graph = serializers.JSONField(required=False, default=dict)
+    required_form_id = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
 
 
 # ---------------------------------------------------------------------------

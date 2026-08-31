@@ -629,6 +629,12 @@ class StageListCreateView(RMAPIView):
                 description=data.get("description", ""),
                 order=data.get("order"),
                 graph=data.get("graph"),
+                # rm_form_store Architecture & Design doc SS18 "Direction
+                # 2", this codebase's own Phase 5 -- a loose public_id
+                # string the caller supplies; see Stage.required_form_id's
+                # own field comment for why nothing here validates it
+                # against rm_form_store.
+                required_form_id=data.get("required_form_id"),
             )
         except GraphValidationError as exc:
             raise ValidationError(str(exc))

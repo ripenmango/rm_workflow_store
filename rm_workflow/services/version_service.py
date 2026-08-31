@@ -57,6 +57,12 @@ class VersionService:
                     "description": stage.description,
                     "order": stage.order,
                     "graph": stage.graph,
+                    # rm_form_store Architecture & Design doc SS18
+                    # "Direction 2", this codebase's own Phase 5 -- must be
+                    # copied forward same as every other stage attribute,
+                    # or publishing a workflow would silently strip its
+                    # required_form_id off every stage that had one.
+                    "required_form_id": stage.required_form_id,
                 }
                 for stage in draft_stages
             ],

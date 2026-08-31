@@ -103,6 +103,7 @@ class StageService:
         description: str = "",
         order: int | None = None,
         graph: dict | None = None,
+        required_form_id: str | None = None,
     ):
         validated_graph = self.graph.validate(graph or {"nodes": [], "edges": []})
         return self.stages.create(
@@ -112,6 +113,11 @@ class StageService:
             description=description,
             order=order,
             graph=validated_graph,
+            # SS18 "Direction 2", Phase 5 -- see Stage.required_form_id's
+            # own field comment for why StageService (still the api ->
+            # services -> repositories layering's "services" tier) doesn't
+            # attempt any cross-package validation of this value either.
+            required_form_id=required_form_id,
         )
 
     def update_metadata(self, stage, **fields):

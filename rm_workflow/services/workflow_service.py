@@ -143,6 +143,13 @@ class WorkflowService:
                         "description": stage_data.get("description", ""),
                         "order": stage_data.get("order", index),
                         "graph": graph,
+                        # rm_form_store Architecture & Design doc SS18
+                        # "Direction 2", this codebase's own Phase 5 --
+                        # carried through bootstrap the same as every
+                        # other stage attribute; absent from most bootstrap
+                        # payloads (StageRepository.bulk_create defaults
+                        # missing keys to None).
+                        "required_form_id": stage_data.get("required_form_id"),
                     }
                 )
             self.stages.bulk_create(tenant_id, draft, bootstrap_stages)
