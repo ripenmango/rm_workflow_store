@@ -1,5 +1,9 @@
 from django.db import transaction
 
+from rm_workflow.services.compiled_version_service import (
+    CompiledVersionService,
+    CompiledVersionServiceError,
+)
 from rm_workflow.stages.repositories import StageRepository
 from rm_workflow.workflows.models import Workflow
 from rm_workflow.workflows.repositories import WorkflowRepository, WorkflowVersionRepository
@@ -15,12 +19,20 @@ class VersionService:
     (without a publish) is handled inline by WorkflowService at workflow
     create-time -- this service owns the publish operation specifically,
     since it's the one that fans out into Stage duplication.
+
+    Publish is compile-on-publish as of Sprint 1 (§41.1/§42): copying Stage
+    rows onto the new version and compiling them into a CompiledVersion
+    happen in the same @transaction.atomic block below, so a published
+    WorkflowVersion always has a matching, engine-ready runtime_dsl -- a
+    CompilationError aborts the publish entirely rather than leaving a
+    published version with no compiled output.
     """
 
     def __init__(self):
         self.workflows = WorkflowRepository()
         self.versions = WorkflowVersionRepository()
         self.stages = StageRepository()
+        self.compiled_versions = CompiledVersionService()
 
     def list_versions(self, tenant_id: str, workflow: Workflow):
         return self.versions.list_for_workflow(tenant_id, workflow)
@@ -38,8 +50,10 @@ class VersionService:
         duplicate every Stage row from the workflow's current draft
         (`workflow.current_version`) onto it -- graph JSON copied as-is,
         no re-validation (it was already validated when it was written).
-        The new version is then marked published and becomes the
-        workflow's current_version.
+        As of Sprint 1, publish also compiles the copied stages into a
+        CompiledVersion (§41.1) before marking the version published --
+        "copy-on-publish" is now "compile-on-publish". The new version is
+        then marked published and becomes the workflow's current_version.
         """
         draft = workflow.current_version
         if draft is None:
@@ -67,6 +81,11 @@ class VersionService:
                 for stage in draft_stages
             ],
         )
+        try:
+            self.compiled_versions.compile_and_store(tenant_id, new_version)
+        except CompiledVersionServiceError as exc:
+            raise VersionServiceError(str(exc)) from exc
+
         self.versions.mark_published(new_version)
         self.workflows.set_current_version(workflow, new_version)
         return new_version

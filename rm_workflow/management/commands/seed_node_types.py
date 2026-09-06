@@ -161,6 +161,91 @@ NODE_TYPES = [
     },
 ]
 
+# Sprint 1 (architecture doc §42): the Compiler (rm_workflow.compiler)
+# only resolves `core.*` node types against this registry -- everything
+# above this point is the pre-existing, frontend-facing builder palette
+# (unchanged). These four are the Runtime DSL's own canonical type
+# identifiers (§4A.3/§7): "type" IS the compiled runtime type here, no
+# separate builder->runtime mapping table exists yet. A Stage graph node
+# that wants to compile in Sprint 1 must set `data.nodeType` to one of
+# these four values directly -- the older `processNode`/`conditionNode`/
+# etc. entries above are NOT resolvable by the Compiler yet (see
+# UnsupportedNodeTypeError in rm_workflow.compiler.compiler) until a real
+# builder-type -> canonical-type mapping is designed, which is out of
+# Sprint 1's scope.
+CORE_NODE_TYPES = [
+    {
+        "type": "core.input", "label": "Input", "category": "input", "icon": "ArrowDownToLine",
+        "description": "Runtime input entry point (Engine Runtime DSL, §4A)",
+        "properties_schema": [
+            field("text", "source", "Source", placeholder="e.g. upload, api, manual"),
+            field("select", "format", "Format", defaultValue="json", options=[
+                {"label": "JSON", "value": "json"}, {"label": "CSV", "value": "csv"}, {"label": "XML", "value": "xml"},
+            ]),
+        ],
+    },
+    {
+        "type": "core.condition", "label": "Condition", "category": "condition", "icon": "GitBranch",
+        "description": "Evaluate a condition before proceeding",
+        "properties_schema": [
+            field("text", "expression", "Expression", validation={"required": True}),
+            field("text", "trueLabel", "True branch label", defaultValue="Yes"),
+            field("text", "falseLabel", "False branch label", defaultValue="No"),
+        ],
+    },
+    {
+        "type": "core.process", "label": "Process", "category": "process", "icon": "Cog",
+        "description": "Transform or process data",
+        "properties_schema": [
+            field("select", "operation", "Operation", defaultValue="transform", options=[
+                {"label": "Transform", "value": "transform"}, {"label": "Validate", "value": "validate"}, {"label": "Enrich", "value": "enrich"},
+            ]),
+            field("textarea", "script", "Script", placeholder="Transformation logic..."),
+        ],
+    },
+    {
+        "type": "core.delay", "label": "Delay", "category": "custom", "icon": "Clock",
+        "description": "Wait for specified time",
+        "properties_schema": [
+            field("number", "duration", "Duration", defaultValue=5, validation={"min": 0}),
+            field("select", "unit", "Unit", defaultValue="seconds", options=[
+                {"label": "Seconds", "value": "seconds"}, {"label": "Minutes", "value": "minutes"}, {"label": "Hours", "value": "hours"},
+            ]),
+        ],
+    },
+]
+
+# Sprint 5: rm_connector_demo's two capabilities (architecture doc's
+# Sprint 5 goal -- prove the full connector path end-to-end). Seeded as
+# global (tenant_id=None) node types like CORE_NODE_TYPES above, now that
+# the Compiler's allow-list (rm_workflow.conf.RM_WORKFLOW.
+# ALLOWED_NODE_TYPE_PREFIXES, default ["*"]) no longer hardcodes core.*
+# as the only compilable prefix -- see compiler.py's module docstring.
+DEMO_NODE_TYPES = [
+    {
+        "type": "demo.log_message", "label": "Demo: Log Message", "category": "custom", "icon": "Zap",
+        "description": "Logs a message to the demo connector worker's output -- no connection required.",
+        "properties_schema": [
+            field("text", "message", "Message", placeholder="Hello from RipenMango", validation={"required": True}),
+        ],
+    },
+    {
+        "type": "demo.echo_with_connection", "label": "Demo: Echo With Connection", "category": "custom", "icon": "ArrowRightLeft",
+        "description": (
+            "Round-trips a message plus a Connection's id through the demo connector worker -- "
+            "proves connection_id flows end-to-end (§13's TaskMessage.connection_id) without "
+            "calling ConnectionManager.resolve() yet (Sprint 5 fakes credential resolution; a "
+            "real internal resolve mechanism is a follow-up)."
+        ),
+        "properties_schema": [
+            field("text", "message", "Message", placeholder="Hello from RipenMango", validation={"required": True}),
+            field("connectionRef", "connectionId", "Connection", connectionProvider="demo", validation={"required": True}),
+        ],
+    },
+]
+
+NODE_TYPES = NODE_TYPES + CORE_NODE_TYPES + DEMO_NODE_TYPES
+
 
 class Command(BaseCommand):
     help = "Seeds the global node type catalog (see this file's module docstring)."
