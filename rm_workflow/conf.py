@@ -15,9 +15,9 @@ without another Compiler code change.
 """
 
 from django.conf import settings
+from drf_base_app.conf import BaseSettings
 
-
-class RMWorkflowSettings:
+class RMWorkflowSettings(BaseSettings):
     namespace = "RM_WORKFLOW"
 
     defaults = {
