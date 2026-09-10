@@ -213,6 +213,20 @@ CORE_NODE_TYPES = [
             ]),
         ],
     },
+    {
+        # Sprint 7 (architecture doc §8's HUMAN category / §40.7): the
+        # Engine (rm_engine_app) never dispatches this to a Worker -- it
+        # goes straight to NodeExecutionStatus.WAITING with no resume_at
+        # (see rm_engine_app.services.wait_nodes.compute_resume_at), and
+        # only leaves WAITING via the resume API endpoint
+        # (POST /api/engine/executions/<id>/nodes/<id>/resume).
+        "type": "core.approval", "label": "Approval", "category": "custom", "icon": "Zap",
+        "description": "Pause the workflow until a human approves or provides input via the resume endpoint",
+        "properties_schema": [
+            field("textarea", "instructions", "Instructions", placeholder="What should the approver check?"),
+            field("text", "assignee", "Assignee", placeholder="e.g. an email or user id (informational only -- not enforced yet)"),
+        ],
+    },
 ]
 
 # Sprint 5: rm_connector_demo's two capabilities (architecture doc's
