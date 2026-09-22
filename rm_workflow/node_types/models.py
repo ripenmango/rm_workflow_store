@@ -78,6 +78,42 @@ class NodeType(RMAuditModel, RMSoftDeleteModel, RMPublicIdModel):
     # as opaque JSON here (not modeled relationally) same rationale as
     # Stage.graph: frontend-shaped, not queried relationally by this app.
     properties_schema = models.JSONField(default=list)
+    # "worker" (default): dispatched over the wire to a Plugin/rm_worker_sdk
+    # Worker process, same as every node type today. "intercept": handled
+    # in-process by the Engine itself (rm_node_engine, not dispatched at
+    # all) -- control.wait, human.approval, and (Phase 4+) workflow.*
+    # nodes. See architecture doc §29 (Sprint 10) for the NodeInput/
+    # NodeResult contract this backs; nothing reads this field yet -- the
+    # Compiler stamps it onto the compiled DSL (§29.6) but the Engine's
+    # dispatch decision doesn't branch on it until Phase 2.
+    execution_strategy = models.CharField(
+        max_length=16,
+        choices=[("worker", "worker"), ("intercept", "intercept")],
+        default="worker",
+    )
+    # Optional JSON Schema describing this node type's NodeResult.output
+    # shape, for a future compile-time check cross-referencing a
+    # downstream node's `$tokens` (see rm_worker_sdk.templating) against
+    # what its predecessor actually produces. Unused until that lands.
+    output_schema = models.JSONField(null=True, blank=True)
+    # Explicit per-capability wire-routing override (Sprint 10 Phase 5,
+    # architecture doc §29.7 items 15-16, §29.9's flagged trigger
+    # condition). `None` (the default, and every node type seeded before
+    # Sprint 10 Phase 5): the compiled node's subject is derived from its
+    # own `type` prefix alone, unchanged
+    # (rm_worker_sdk.protocol.routing.task_subject()'s original behavior).
+    # Set this only when a node type must run on a DIFFERENT worker fleet
+    # than the rest of its taxonomy prefix/category would otherwise imply
+    # -- e.g. `data.fetch_form_submission` (category "data", same as
+    # `data.transform`) sets `routing_group="formstore"` so its tasks
+    # route to `rm.tasks.formstore` (a dedicated worker in rm_platform
+    # that can import rm_form_store) rather than `rm.tasks.data` (the
+    # Core Worker's subject, which has no DB access at all -- see
+    # rm_engine_app's run_core_worker.py). The Compiler stamps this
+    # verbatim onto every compiled node (Compiler._compile_node, alongside
+    # execution_strategy) so DispatchService never needs a NodeType
+    # lookup at dispatch time -- see that stamp's own comment for why.
+    routing_group = models.CharField(max_length=64, null=True, blank=True)
     is_active = models.BooleanField(
         default=True
     )  # global kill switch (deprecate a type everywhere)

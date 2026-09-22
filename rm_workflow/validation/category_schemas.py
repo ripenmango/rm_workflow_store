@@ -3,6 +3,20 @@ Node category validation (§8/§9). Categories are fixed JSON strings for now
 -- a category registry (pluggable, tenant-defined categories) was
 deliberately deferred (workflow-store-design.md, "Node categories" decision)
 in favor of shipping something concrete first.
+
+Sprint 10 Phase 3 (architecture doc §29.6/§29.7 item 13): `NODE_CATEGORIES`
+is replaced wholesale with the TRIGGER/CONTROL/DATA/ACTION/WORKFLOW/HUMAN
+taxonomy, rather than extended -- the old set (`input`/`process`/`output`/
+`decision`/`action`/`condition`/`custom`) is gone entirely except for
+`action`, which both sets happen to share. This is a deliberate breaking
+change, acceptable only because no production data exists yet (dev-phase
+migration policy: wipe and reseed rather than migrate in place). It
+breaks category validation for any stage graph node whose `data.category`
+used one of the removed values -- see `seed_node_types.py`'s own docstring
+for which seeded node types were updated in the same pass to stay valid
+(`CORE_NODE_TYPES`, `DEMO_NODE_TYPES`) and which were deliberately left
+stale (the pre-Sprint-10 frontend-palette catalog, not used by anything
+that calls `validate_node_data()` today).
 """
 
 
@@ -14,13 +28,12 @@ class GraphValidationError(Exception):
 
 NODE_CATEGORIES = frozenset(
     {
-        "input",
-        "process",
-        "output",
-        "decision",
+        "trigger",
+        "control",
+        "data",
         "action",
-        "condition",
-        "custom",
+        "workflow",
+        "human",
     }
 )
 

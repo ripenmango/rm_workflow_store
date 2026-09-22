@@ -372,6 +372,23 @@ class Compiler:
             "id": _qualified_id(stage, node_id),
             "type": type_key,
             "version": self.NODE_VERSION,
+            # Sprint 10 Phase 1 (architecture doc §29.6): stamped straight
+            # from the Node Registry so the Engine can decide dispatch vs.
+            # in-process handling (rm_node_engine, Phase 2+) without a
+            # lookup back into rm_workflow_store at execution time. Every
+            # node type seeded before Sprint 10 defaults to "worker" (see
+            # NodeType.execution_strategy), so this is additive only --
+            # existing compiled output just gains one more key.
+            "execution_strategy": node_type.execution_strategy,
+            # Sprint 10 Phase 5 (architecture doc §29.7 items 15-16/§29.9):
+            # same reasoning as execution_strategy above -- stamped once
+            # here so DispatchService/task_subject() never need a NodeType
+            # lookup at dispatch time either. `None` for every node type
+            # that doesn't set NodeType.routing_group (the overwhelming
+            # majority), which is exactly what makes
+            # rm_worker_sdk.protocol.routing.task_subject() fall back to
+            # its original prefix-derived behavior.
+            "routing_group": node_type.routing_group,
             "config": config,
         }
 

@@ -16,6 +16,13 @@ class NodeTypeSerializer(serializers.RMSerializer):
     icon = serializers.CharField()
     description = serializers.CharField(required=False, default="", allow_blank=True)
     properties_schema = serializers.JSONField()
+    # Sprint 10 Phase 7 (architecture doc §29.7 item 22): exposes
+    # NodeType.output_schema so rm_workflow_client's property panel can
+    # read a node type's static NodeResult.output shape for the `$`
+    # autocomplete graph-walk (getAvailableAttributes) without a second
+    # lookup. None for every node type that doesn't declare one (most of
+    # them) -- see NodeType.output_schema's own field comment.
+    output_schema = serializers.JSONField(required=False, allow_null=True, default=None)
 
 
 # ---------------------------------------------------------------------------

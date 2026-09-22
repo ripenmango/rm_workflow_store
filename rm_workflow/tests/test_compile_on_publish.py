@@ -5,6 +5,19 @@ graph. Exercised through the real public entry points
 (WorkflowService.create_workflow + VersionService.publish), not by poking
 Stage rows directly, so this also proves the wiring into publish() (§41.1)
 actually works end to end, not just Compiler.compile() in isolation.
+
+Sprint 10 Phase 3 (architecture doc §29.6/§29.7 item 13): every `core.*`
+node type/category literal below is updated to the renamed taxonomy
+(`core.input`/`input`→`trigger.workflow_started`/`trigger`,
+`core.condition`/`condition`→`control.condition`/`control`,
+`core.process`/`process`→`data.transform`/`data`), and the two tests using
+`processNode`/`"process"` and `does.not.exist`/`"custom"` as an arbitrary
+non-core placeholder type had their `category` argument updated to
+`"action"` -- `"process"`/`"custom"` no longer validate under the new
+`NODE_CATEGORIES` (category_schemas.py), and `GraphService.validate()`
+checks category before the Compiler ever runs, so those two tests would
+otherwise fail at `create_workflow()` for an unrelated reason before
+reaching the allow-list/unresolved-type behavior they actually test.
 """
 
 import pytest
@@ -36,9 +49,9 @@ def actor(db):
 
 @pytest.fixture
 def core_node_types(db):
-    """Sprint 1's core.* node types (seed_node_types.py) -- run directly so
-    tests don't depend on the management command having been run against
-    whatever database pytest-django spins up."""
+    """Sprint 1's core-taxonomy node types (seed_node_types.py) -- run
+    directly so tests don't depend on the management command having been
+    run against whatever database pytest-django spins up."""
     call_command("seed_node_types")
 
 
@@ -60,8 +73,8 @@ def _two_stage_workflow(name="Two-stage workflow"):
                 "name": "Stage 1",
                 "graph": {
                     "nodes": [
-                        _core_node("n1", "core.input", "input", source="form"),
-                        _core_node("n2", "core.process", "process", operation="transform"),
+                        _core_node("n1", "trigger.workflow_started", "trigger", source="form"),
+                        _core_node("n2", "data.transform", "data", operation="transform"),
                     ],
                     "edges": [{"id": "e1", "source": "n1", "target": "n2"}],
                 },
@@ -70,7 +83,7 @@ def _two_stage_workflow(name="Two-stage workflow"):
                 "name": "Stage 2",
                 "graph": {
                     "nodes": [
-                        _core_node("n1", "core.condition", "condition", expression="true"),
+                        _core_node("n1", "control.condition", "control", expression="true"),
                     ],
                     "edges": [],
                 },
@@ -107,7 +120,7 @@ def test_publish_compiles_and_flattens_a_multi_stage_draft(actor, core_node_type
     assert f"{stage2.public_id}:n1" in node_by_id
 
     # node_type resolved through to the runtime type + a version stamp
-    assert node_by_id[f"{stage1.public_id}:n2"]["type"] == "core.process"
+    assert node_by_id[f"{stage1.public_id}:n2"]["type"] == "data.transform"
     assert node_by_id[f"{stage1.public_id}:n2"]["version"] == Compiler.NODE_VERSION
     assert node_by_id[f"{stage1.public_id}:n2"]["config"] == {"operation": "transform"}
 
@@ -145,7 +158,7 @@ def test_publish_is_atomic_when_compilation_fails(actor, core_node_types):
             {
                 "name": "Stage 1",
                 "graph": {
-                    "nodes": [_core_node("n1", "does.not.exist", "custom")],
+                    "nodes": [_core_node("n1", "does.not.exist", "action")],
                     "edges": [],
                 },
             }
@@ -174,7 +187,13 @@ def test_publish_rejects_node_types_outside_the_configured_allow_list(
     This test proves the allow-list mechanism itself still rejects a
     disallowed prefix correctly when a tenant/environment configures one
     -- it no longer describes today's *default* behavior, since the
-    default is now permissive by design."""
+    default is now permissive by design.
+
+    The configured allow-list below (["core."]) predates the Sprint 10
+    Phase 3 taxonomy rename and is left as "core." on purpose: no seeded
+    node type has that prefix anymore, so it still demonstrates "an
+    allow-list can reject a real, registered type" exactly as before --
+    the specific prefix chosen isn't the point of this test."""
     settings.RM_WORKFLOW = {"ALLOWED_NODE_TYPE_PREFIXES": ["core."]}
 
     workspace = WorkspaceService().create_workspace(TENANT_ID, name="Legacy type WS")
@@ -186,7 +205,7 @@ def test_publish_rejects_node_types_outside_the_configured_allow_list(
             {
                 "name": "Stage 1",
                 "graph": {
-                    "nodes": [_core_node("n1", "processNode", "process")],
+                    "nodes": [_core_node("n1", "processNode", "action")],
                     "edges": [],
                 },
             }
@@ -215,7 +234,7 @@ def test_publish_allows_non_core_node_types_by_default(actor, core_node_types):
             {
                 "name": "Stage 1",
                 "graph": {
-                    "nodes": [_core_node("n1", "processNode", "process")],
+                    "nodes": [_core_node("n1", "processNode", "action")],
                     "edges": [],
                 },
             }
@@ -241,7 +260,7 @@ def test_publish_of_single_stage_draft_has_no_cross_stage_edges(actor, core_node
             {
                 "name": "Only stage",
                 "graph": {
-                    "nodes": [_core_node("n1", "core.input", "input")],
+                    "nodes": [_core_node("n1", "trigger.workflow_started", "trigger")],
                     "edges": [],
                 },
             }
@@ -268,17 +287,20 @@ def _three_stage_workflow_for_branching(name):
             {
                 "name": "Stage 1 (branches explicitly)",
                 "graph": {
-                    "nodes": [_core_node("n1", "core.condition", "condition", expression="true")],
+                    "nodes": [_core_node("n1", "control.condition", "control", expression="true")],
                     "edges": [],
                 },
             },
             {
                 "name": "Stage 2 (skipped by the explicit jump)",
-                "graph": {"nodes": [_core_node("n1", "core.input", "input")], "edges": []},
+                "graph": {
+                    "nodes": [_core_node("n1", "trigger.workflow_started", "trigger")],
+                    "edges": [],
+                },
             },
             {
                 "name": "Stage 3 (explicit jump target)",
-                "graph": {"nodes": [_core_node("n1", "core.process", "process")], "edges": []},
+                "graph": {"nodes": [_core_node("n1", "data.transform", "data")], "edges": []},
             },
         ],
     )
@@ -300,8 +322,8 @@ def test_publish_resolves_explicit_stage_jump_and_skips_default_chain(actor, cor
             "nodes": [
                 _core_node(
                     "n1",
-                    "core.condition",
-                    "condition",
+                    "control.condition",
+                    "control",
                     expression="true",
                     branches={"true": stage3.public_id},
                 )
@@ -351,8 +373,8 @@ def test_publish_fails_for_branch_targeting_unknown_stage(actor, core_node_types
             "nodes": [
                 _core_node(
                     "n1",
-                    "core.condition",
-                    "condition",
+                    "control.condition",
+                    "control",
                     expression="true",
                     branches={"true": "stg_does_not_exist"},
                 )
@@ -376,8 +398,8 @@ def test_publish_fails_for_malformed_branches_config(actor, core_node_types):
             "nodes": [
                 _core_node(
                     "n1",
-                    "core.condition",
-                    "condition",
+                    "control.condition",
+                    "control",
                     expression="true",
                     branches={"true": 12345},  # not a string target
                 )
@@ -405,8 +427,8 @@ def test_publish_fails_for_backward_branch_jump(actor, core_node_types):
             "nodes": [
                 _core_node(
                     "n1",
-                    "core.condition",
-                    "condition",
+                    "control.condition",
+                    "control",
                     expression="retry",
                     branches={"retry": stage1.public_id},
                 )
@@ -432,8 +454,8 @@ def test_publish_fails_for_self_targeting_branch_jump(actor, core_node_types):
             "nodes": [
                 _core_node(
                     "n1",
-                    "core.condition",
-                    "condition",
+                    "control.condition",
+                    "control",
                     expression="retry",
                     branches={"retry": stage1.public_id},
                 )
@@ -444,4 +466,3 @@ def test_publish_fails_for_self_targeting_branch_jump(actor, core_node_types):
 
     with pytest.raises(VersionServiceError):
         VersionService().publish(TENANT_ID, workflow)
-
