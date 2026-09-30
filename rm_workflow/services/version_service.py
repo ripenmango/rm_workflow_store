@@ -43,6 +43,28 @@ class VersionService:
             raise VersionServiceError("Workflow version not found")
         return version
 
+    def get_latest_published(self, tenant_id: str, workflow: Workflow):
+        """
+        What an execution start with no explicit version pin should
+        actually run. Before create_new_draft() existed, `current_version`
+        and "the latest published version" were always the same thing --
+        the only way current_version ever changed was publish() itself, so
+        it could never be a draft. That's no longer true: create_new_draft()
+        can leave `current_version` pointing at a brand new, uncompiled
+        draft while an older version is still published and perfectly
+        runnable. rm_engine_app's ExecutionService._resolve_compiled_version
+        calls this (not workflow.current_version) for exactly that reason --
+        see its own docstring/comment for the bug this fixed (an active
+        FormTrigger failing every submission the moment someone starts
+        editing a published workflow again, with no new publish yet).
+        """
+        version = self.versions.get_latest_published(tenant_id, workflow)
+        if version is None:
+            raise VersionServiceError(
+                f"Workflow '{workflow.public_id}' has never been published"
+            )
+        return version
+
     @transaction.atomic
     def publish(self, tenant_id: str, workflow: Workflow):
         """
@@ -63,23 +85,7 @@ class VersionService:
 
         new_version = self.versions.create_draft(tenant_id, workflow)
         self.stages.bulk_create(
-            tenant_id,
-            new_version,
-            [
-                {
-                    "name": stage.name,
-                    "description": stage.description,
-                    "order": stage.order,
-                    "graph": stage.graph,
-                    # rm_form_store Architecture & Design doc SS18
-                    # "Direction 2", this codebase's own Phase 5 -- must be
-                    # copied forward same as every other stage attribute,
-                    # or publishing a workflow would silently strip its
-                    # required_form_id off every stage that had one.
-                    "required_form_id": stage.required_form_id,
-                }
-                for stage in draft_stages
-            ],
+            tenant_id, new_version, self._stage_copy_dicts(draft_stages)
         )
         try:
             self.compiled_versions.compile_and_store(tenant_id, new_version)
@@ -89,3 +95,63 @@ class VersionService:
         self.versions.mark_published(new_version)
         self.workflows.set_current_version(workflow, new_version)
         return new_version
+
+    @transaction.atomic
+    def create_new_draft(self, tenant_id: str, workflow: Workflow):
+        """
+        The counterpart create_draft() operation publish() never left
+        behind for getting back INTO edit mode: publish() always leaves
+        `workflow.current_version` pointed at the just-published,
+        immutable version (see CompiledVersion's own model docstring, and
+        StageService's is_published guards -- Sprint 10 gap-fix), and
+        nothing else in this codebase ever calls
+        WorkflowVersionRepository.create_draft() except publish() itself
+        and WorkflowService.create_workflow()'s very first draft. Without
+        this method, a workflow that's ever been published has no way to
+        become editable again.
+
+        Copies every Stage from the workflow's CURRENT version onto a
+        brand new `is_published=False` WorkflowVersion (same
+        stage-duplication shape as publish(), via the same
+        _stage_copy_dicts() helper -- just without the compile step, since
+        an unpublished draft has no CompiledVersion until IT'S published),
+        and makes that new draft the workflow's current_version. An
+        explicit, deliberate action (not auto-triggered by the first stage
+        edit after a publish) -- see the API view's own docstring for why.
+
+        Refuses if the current version is already a draft -- there's
+        nothing published to fork from, and the caller should just keep
+        editing what they have.
+        """
+        current = workflow.current_version
+        if current is None:
+            raise VersionServiceError("Workflow has no current version to fork")
+        if not current.is_published:
+            raise VersionServiceError(
+                "The current version is already a draft -- keep editing it directly"
+            )
+
+        current_stages = list(self.stages.list_for_version(tenant_id, current))
+        new_draft = self.versions.create_draft(tenant_id, workflow)
+        self.stages.bulk_create(
+            tenant_id, new_draft, self._stage_copy_dicts(current_stages)
+        )
+        self.workflows.set_current_version(workflow, new_draft)
+        return new_draft
+
+    @staticmethod
+    def _stage_copy_dicts(stages) -> list[dict]:
+        """Shared by publish() and create_new_draft() -- both duplicate a
+        version's stages onto a brand new WorkflowVersion the exact same
+        way; kept in one place so a future new stage attribute only needs
+        to be added to the copy here once, not in each caller."""
+        return [
+            {
+                "name": stage.name,
+                "description": stage.description,
+                "order": stage.order,
+                "graph": stage.graph,
+                "required_form_id": stage.required_form_id,
+            }
+            for stage in stages
+        ]

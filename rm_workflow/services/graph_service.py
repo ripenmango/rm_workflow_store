@@ -71,6 +71,20 @@ class StageServiceError(Exception):
     to different HTTP statuses."""
 
 
+class StageImmutableError(Exception):
+    """
+    Raised by every StageService write method when the target Stage's
+    WorkflowVersion is already published. CompiledVersion's own model
+    docstring always described a published WorkflowVersion as immutable
+    ("only ever compiled once ... a later in-place edit ... can't silently
+    change what a running execution is executing"), but nothing actually
+    enforced that until now -- these guards close that gap. The only way
+    back into edit mode once a workflow has been published is
+    VersionService.create_new_draft(); see that method's and the
+    corresponding API view's docstrings.
+    """
+
+
 class StageService:
     """
     Stage CRUD + the dedicated graph write path (§10). Metadata edits
@@ -105,6 +119,10 @@ class StageService:
         graph: dict | None = None,
         required_form_id: str | None = None,
     ):
+        if workflow_version.is_published:
+            raise StageImmutableError(
+                "This version is published and read-only -- start a new draft to add stages"
+            )
         validated_graph = self.graph.validate(graph or {"nodes": [], "edges": []})
         return self.stages.create(
             tenant_id=tenant_id,
@@ -121,11 +139,23 @@ class StageService:
         )
 
     def update_metadata(self, stage, **fields):
+        if stage.workflow_version.is_published:
+            raise StageImmutableError(
+                "This version is published and read-only -- start a new draft to edit it"
+            )
         return self.stages.update_metadata(stage, **fields)
 
     def update_graph(self, stage, graph: dict):
+        if stage.workflow_version.is_published:
+            raise StageImmutableError(
+                "This version is published and read-only -- start a new draft to edit it"
+            )
         validated_graph = self.graph.validate(graph)
         return self.stages.update_graph(stage, validated_graph)
 
     def delete_stage(self, stage) -> None:
+        if stage.workflow_version.is_published:
+            raise StageImmutableError(
+                "This version is published and read-only -- start a new draft to delete stages"
+            )
         self.stages.soft_delete(stage)

@@ -81,6 +81,21 @@ class WorkflowVersionRepository:
             tenant_id=tenant_id, workflow=workflow
         ).order_by("-version_number")
 
+    def get_latest_published(
+        self, tenant_id: str, workflow: Workflow
+    ) -> WorkflowVersion | None:
+        """The version an unpinned execution start should actually run --
+        see VersionService.get_latest_published()'s own docstring for why
+        this is NOT the same thing as `workflow.current_version` since
+        create_new_draft() started existing (Sprint 10 gap-fix)."""
+        return (
+            WorkflowVersion.objects.filter(
+                tenant_id=tenant_id, workflow=workflow, is_published=True
+            )
+            .order_by("-version_number")
+            .first()
+        )
+
     def latest_version_number(self, workflow: Workflow) -> int:
         latest = (
             WorkflowVersion.objects.filter(workflow=workflow)

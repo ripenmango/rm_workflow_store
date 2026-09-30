@@ -36,6 +36,7 @@ from rm_workflow.api.serializers import (
 )
 from rm_workflow.services.graph_service import (
     GraphValidationError,
+    StageImmutableError,
     StageService,
     StageServiceError,
 )
@@ -572,6 +573,46 @@ class WorkflowVersionListView(RMAPIView):
         return Response(WorkflowVersionSerializer(versions, many=True).data)
 
 
+class CreateNewDraftView(RMAPIView):
+    """POST /api/workflow/workflows/<workflow_id>/versions/new-draft"""
+
+    permission_classes = [RequiresPermission("workflow", "edit")]
+
+    @rm_swagger(
+        summary="Start a new editable draft from the current published version",
+        description=(
+            "A published WorkflowVersion is read-only (its Stage rows can no "
+            "longer be created/edited/deleted -- see StageGraphView and the "
+            "other Stage endpoints, which now reject writes against a "
+            "published version). This is the explicit action that gets a "
+            "workflow back into edit mode: it copies every Stage from the "
+            "current published version onto a brand new, unpublished "
+            "WorkflowVersion and makes that the workflow's current_version, "
+            "the same stage-duplication shape publish() itself uses (just "
+            "without compiling it -- an unpublished draft has no "
+            "CompiledVersion until IT'S published). Deliberately a separate, "
+            "explicit call rather than something the builder triggers "
+            "automatically on the first edit after a publish -- so forking a "
+            "new version is always something the caller asked for, not a "
+            "side effect of clicking into the canvas."
+        ),
+        success=WorkflowVersionSerializer,
+        responses={
+            400: error_response("Current version is already a draft."),
+            404: error_response("Workflow not found."),
+        },
+        tags=["Workflows"],
+        auth=["Bearer"],
+    )
+    def post(self, request, workflow_id):
+        workflow = _get_workflow_or_404(request, workflow_id, action="edit")
+        try:
+            new_draft = VersionService().create_new_draft(_tenant_id(request), workflow)
+        except VersionServiceError as exc:
+            raise ValidationError(str(exc))
+        return Response(WorkflowVersionSerializer(new_draft).data, status=201)
+
+
 # ---------------------------------------------------------------------------
 # Stages
 # ---------------------------------------------------------------------------
@@ -638,6 +679,8 @@ class StageListCreateView(RMAPIView):
             )
         except GraphValidationError as exc:
             raise ValidationError(str(exc))
+        except StageImmutableError as exc:
+            raise ValidationError(str(exc))
 
         return Response(StageSerializer(stage).data, status=201)
 
@@ -683,7 +726,10 @@ class StageDetailView(RMAPIView):
         serializer = UpdateStageMetadataSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
-        updated = StageService().update_metadata(stage, **serializer.validated_data)
+        try:
+            updated = StageService().update_metadata(stage, **serializer.validated_data)
+        except StageImmutableError as exc:
+            raise ValidationError(str(exc))
         return Response(StageSerializer(updated).data)
 
     @rm_swagger(
@@ -696,7 +742,10 @@ class StageDetailView(RMAPIView):
     )
     def delete(self, request, workflow_id, version_id, stage_id):
         stage = self._get_stage(request, workflow_id, version_id, stage_id)
-        StageService().delete_stage(stage)
+        try:
+            StageService().delete_stage(stage)
+        except StageImmutableError as exc:
+            raise ValidationError(str(exc))
         return Response({"deleted": True})
 
 
@@ -742,6 +791,8 @@ class StageGraphView(RMAPIView):
                 stage, dict(serializer.validated_data)
             )
         except GraphValidationError as exc:
+            raise ValidationError(str(exc))
+        except StageImmutableError as exc:
             raise ValidationError(str(exc))
 
         return Response(StageSerializer(updated).data)

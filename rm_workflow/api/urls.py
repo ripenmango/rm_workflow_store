@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.routers import SimpleRouter
 
 from rm_workflow.api.views import (
+    CreateNewDraftView,
     NodeTypeListView,
     ProjectViewSet,
     PublishWorkflowView,
@@ -33,6 +34,11 @@ urlpatterns = [
         "workflows/<str:workflow_id>/versions",
         WorkflowVersionListView.as_view(),
         name="rm_workflow_version_list",
+    ),
+    path(
+        "workflows/<str:workflow_id>/versions/new-draft",
+        CreateNewDraftView.as_view(),
+        name="rm_workflow_version_new_draft",
     ),
     path(
         "workflows/<str:workflow_id>/versions/<str:version_id>/stages",
