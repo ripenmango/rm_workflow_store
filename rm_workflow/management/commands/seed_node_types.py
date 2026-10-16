@@ -285,6 +285,25 @@ CORE_NODE_TYPES = [
         ],
     },
     {
+        # Sprint 6 (API surface doc §3.6): creates a human Task bound to a
+        # form and an assignee, then waits until the task is completed via
+        # POST /api/engine/tasks/<id>/complete. Never dispatched to a Worker
+        # (intercept, like human.approval). `assignee` and `entity` are
+        # keyValue maps -- {user|role: ...} and {type: ..., id: ...} -- whose
+        # values may be `$ctx.<field>` expressions read from this node's input.
+        # Publish-time checks (form exists/published, role exists) are not
+        # built: a bad config fails the execution when the task is created.
+        "type": "human.manual_task", "label": "Manual Task", "category": "human", "icon": "Zap",
+        "description": "Assign a form to a person or role and wait until they complete it",
+        "execution_strategy": "intercept",
+        "properties_schema": [
+            field("formRef", "form", "Form", validation={"required": True}),
+            field("keyValue", "assignee", "Assignee", helpText='One entry: user = $ctx.dentist_id, or role = receptionist', validation={"required": True}),
+            field("keyValue", "entity", "Entity", helpText='Optional: type = patient, id = $ctx.patient_id'),
+            field("text", "due_in", "Due in", placeholder="ISO 8601 duration, e.g. PT2H"),
+        ],
+    },
+    {
         # Sprint 10 Phase 4 (architecture doc §29.7 item 14): fire-and-
         # forget -- starts a new WorkflowExecution and immediately
         # succeeds with the new execution's id as output, never blocking
